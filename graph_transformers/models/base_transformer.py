@@ -147,9 +147,26 @@ class AttentionResidual(nn.Module):
         x = self.ffn(x) + x
         return x, alphas
 
+class OutLayer(nn.Module):
+
+    def __init__(self, dim: int, seq_len: int | None, out_dim: int):
+        if seq_len is None:
+            raise ValueError("seq_len must be provided if out_dim is not None")
+        
+        super().__init__()
+        self.net = nn.Sequential(
+                nn.LayerNorm(dim),
+                nn.Flatten(),
+                nn.GELU(),
+                nn.Linear(dim * seq_len, out_dim),
+            )
+    
+    def forward(self, x: torch.Tensor, attn_mask = None) -> torch.Tensor:
+        return self.net(x), None
+    
 
 class Transformer(nn.Module):
-    def __init__(self, dim: int, attn_dim: int, mlp_dim: int, num_heads: int, num_layers: int):
+    def __init__(self, dim: int, attn_dim: int, mlp_dim: int, num_heads: int, num_layers: int, seq_len: int | None = None, out_dim = None):
         """
         Args:
             dim: The input and output dimension of the attention head
@@ -163,6 +180,9 @@ class Transformer(nn.Module):
             AttentionResidual(dim, attn_dim, mlp_dim, num_heads) 
             for _ in range(num_layers)
         ])
+
+        if out_dim is not None:
+            self.layers.append(OutLayer(dim, seq_len, out_dim))
 
     def forward(self, x: torch.Tensor, attn_mask: torch.Tensor, return_attn=False) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
@@ -180,9 +200,10 @@ class Transformer(nn.Module):
         for layer in self.layers:
             x, alphas = layer(x, attn_mask)
             if return_attn:
-                # Permute alphas to shape (batch_size, num_heads, num_tokens, num_tokens)
-                # alphas = alphas.permute(1, 0, 2, 3) 
-                collected_attns.append(alphas.unsqueeze(1))
+                if alphas is not None:
+                    # Permute alphas to shape (batch_size, num_heads, num_tokens, num_tokens)
+                    # alphas = alphas.permute(1, 0, 2, 3) 
+                    collected_attns.append(alphas.unsqueeze(1))
 
         output = x
         collected_attns = torch.cat(collected_attns, dim = 1) if return_attn else None
@@ -190,6 +211,3 @@ class Transformer(nn.Module):
         return output, collected_attns
 
 
-
-if __name__ == "__main__":
-    perform_transformer_test_cases()

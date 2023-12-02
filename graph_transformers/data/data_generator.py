@@ -35,12 +35,15 @@ class GraphDataset(Dataset):
         self.targets = []
         
         for _ in range(num_samples):
-            adjacency_matrix, edge_weights = self.generate_graph(n, p, max_weight)
-            graph_data = torch.stack([adjacency_matrix, edge_weights], dim=0)  # Shape: (2, n, n)
+            adjacency_matrix, edge_weights = self.generate_graph(num_nodes, edge_prob, max_weight)
+            graph_data = torch.stack([
+                torch.from_numpy(adjacency_matrix), 
+                torch.from_numpy(edge_weights)
+                ], dim=0)  # Shape: (2, n, n)
             self.graphs.append(graph_data)
 
             if self.target_type == "shortest_path":
-                self.targets.append(self.shortest_path_length(edge_weights))
+                self.targets.append(torch.tensor([self.shortest_path_length(edge_weights)]))
 
 
     def __len__(self):
@@ -50,7 +53,7 @@ class GraphDataset(Dataset):
         return self.graphs[idx], self.targets[idx]
 
 
-    def generate_graph(n, p, max_weight=10, neg_weights = False):
+    def generate_graph(self, n, p, max_weight=10, neg_weights = False):
         """
         Generate a random graph with n nodes and edge probability p. Returns the adjacency matrix and edge weights.
 
@@ -81,7 +84,7 @@ class GraphDataset(Dataset):
 
         return adjacency, edge_weights
 
-    def shortest_path_length(edge_weights):
+    def shortest_path_length(self, edge_weights):
         """
         Compute the shortest path length between node 0 and 1 in the graph defined by the edge weights.
 
