@@ -1,0 +1,36 @@
+{   
+    "dataset":{
+        "n":10,
+        "seq_len":10,
+        "channels":2,
+        "edge_prob":0.5,
+        "max_weight":10,
+        "graph_neg_weights":false,
+        "seed":1,
+        "num_samples":50000
+    },
+    "models":{
+        "train_test_split": 0.6,
+        "seed": 1,
+        "batch_size": 128,
+        "epochs": 32,
+        "learning_rate": 0.001
+    },
+    "mlp":{},
+    "gnn":{},
+    "transformer":{
+        "attn_dim": 64,
+        "mlp_dim": 64,
+        "num_heads": 4,
+        "num_layers": 2
+    },
+    "transformer_small":{
+        "num_layers": 2
+    },
+    "transformer_mid":{
+        "num_layers": 5
+    },
+    "transformer_large":{
+        "num_layers": 10
+    }
+}

@@ -44,7 +44,9 @@ class GraphDataset(Dataset):
             self.graphs.append(graph_data)
 
             if self.target_type == "shortest_path":
-                self.targets.append(torch.tensor([self.shortest_path_length(edge_weights)]))
+                self.targets.append(torch.tensor(self.shortest_path_length(edge_weights)))
+            elif self.target_type == "min_coloring":
+                self.targets.append(torch.tensor([self.min_coloring(adjacency_matrix, 1000)[0]]))
 
 
     def __len__(self):
@@ -97,13 +99,15 @@ class GraphDataset(Dataset):
         """
         # edge_weights = np.where(adj_matrix == 1, edge_weights, float("+inf")) # Set non-edges to infinity
         G = nx.from_numpy_array(edge_weights)
-        try:
-            # Compute shortest path using Dijkstra's algorithm
-            path_length = nx.dijkstra_path_length(G, 0, 1)
-        except nx.NetworkXNoPath:
-            path_length = -1
+        
+        path_lengths = nx.single_source_dijkstra_path_length(G, source=0, weight='weight')
 
-        return path_length
+        # Create a numpy array of path lengths
+        path_length_array = np.full(self.num_nodes, -1)
+        for node, length in path_lengths.items():
+            path_length_array[node] = length
+
+        return path_length_array
 
 
     def is_valid_coloring(self, graph, colors):

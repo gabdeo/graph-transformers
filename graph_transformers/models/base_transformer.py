@@ -132,7 +132,7 @@ class FFN(nn.Module):
 
 
 class AttentionResidual(nn.Module):
-    def __init__(self, dim: int, attn_dim: int, mlp_dim: int, num_heads: int):
+    def __init__(self, dim: int, attn_dim: int, mlp_dim: int, num_heads: int, skip_connexion = "sum"):
         """
         Args:
             dim: The input and output dimension of the attention head
@@ -142,7 +142,12 @@ class AttentionResidual(nn.Module):
         """
         super().__init__()
         self.attn = MultiHeadedAttention(dim, attn_dim, num_heads)
-        self.ffn = FFN(dim, mlp_dim)
+        if skip_connexion == "concat":
+            self.ffn = FFN(2 * dim, mlp_dim)
+        else:
+            self.ffn = FFN(dim, mlp_dim)
+
+        self.skip_connexion = skip_connexion
 
     def forward(
         self, x: torch.Tensor, attn_mask: torch.Tensor
@@ -158,7 +163,13 @@ class AttentionResidual(nn.Module):
         """
 
         attn_out, alphas = self.attn(x=x, attn_mask=attn_mask)
-        x = attn_out + x
+        
+        if self.skip_connexion == "sum":
+            x = attn_out + x
+        elif self.skip_connexion == "concat":
+            x = torch.cat([attn_out, x], dim=-1)
+            x = self.ffn(x) + x
+        
         x = self.ffn(x) + x
         return x, alphas
 
@@ -190,6 +201,7 @@ class Transformer(nn.Module):
         num_layers: int,
         seq_len: int | None = None,
         out_dim=None,
+        skip_connexion = "sum"
     ):
         """
         Args:
@@ -198,11 +210,17 @@ class Transformer(nn.Module):
             mlp_dim: The hidden dimension of the FFN
             num_heads: The number of attention heads
             num_layers: The number of transformer layers
+            seq_len: The sequence length of the input (must be provided if out_dim is not None)
+            out_dim: The output dimension of the transformer
+            skip_connexion: The type of skip connexion to use (sum or concat)
         """
+        if skip_connexion not in ["sum", "concat"]:
+            raise ValueError("skip_connexion must be either 'sum' or 'concat'")
+        
         super().__init__()
         self.layers = nn.ModuleList(
             [
-                AttentionResidual(dim, attn_dim, mlp_dim, num_heads)
+                AttentionResidual(dim, attn_dim, mlp_dim, num_heads, skip_connexion)
                 for _ in range(num_layers)
             ]
         )
