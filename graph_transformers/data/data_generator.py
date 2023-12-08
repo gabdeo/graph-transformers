@@ -3,6 +3,7 @@ import networkx as nx
 import random
 import torch
 from torch.utils.data import Dataset
+from matplotlib import pyplot as plt
 
 
 class GraphDataset(Dataset):
@@ -105,6 +106,72 @@ class GraphDataset(Dataset):
         return path_length
 
 
+    def is_valid_coloring(self, graph, colors):
+        for node in range(len(graph)):
+            for neighbor in range(len(graph)):
+                if graph[node][neighbor] and colors[node] == colors[neighbor]:
+                    return False
+        return True
+
+    def color_graph(self, graph, m, colors, node, iteration, max_iterations):
+        if iteration > max_iterations:
+            return False, iteration
+
+        if node == len(graph):
+            return self.is_valid_coloring(graph, colors), iteration
+
+        for color in range(1, m + 1):
+            colors[node] = color
+            valid, iteration = self.color_graph(graph, m, colors, node + 1, iteration + 1, max_iterations)
+            if valid:
+                return True, iteration
+
+        return False, iteration
+
+    def min_coloring(self, adjacency_matrix, max_iterations):
+        n = len(adjacency_matrix)
+        for m in range(1, n + 1):
+            colors = [0] * n
+            found, iteration = self.color_graph(adjacency_matrix, m, colors, 0, 0, max_iterations)
+            if found:
+                return m, iteration
+        return -1, iteration
+
+    
+    def plot_graph(self, idx: None | int = None, adjacency_matrix : None | np.ndarray = None , edge_weights_matrix : None | np.ndarray = None):
+        """
+        Plot a graph given its adjacency matrix.
+
+        Args:
+            idx (int): Index of the graph in the dataset
+            adjacency_matrix (np.array): Adjacency matrix of the graph
+        """
+        if idx is not None:
+            adjacency_matrix = self.graphs[idx][0].numpy()
+            edge_weights_matrix = self.graphs[idx][1].numpy()
+        
+        elif adjacency_matrix is None:
+            raise ValueError("Either idx or adjacency_matrix must be provided.")
+        
+        # Convert the adjacency matrix to a NetworkX graph
+        G = nx.from_numpy_array(adjacency_matrix)
+
+        # Generate layout for visualization
+        pos = nx.spring_layout(G)
+
+        # Draw the graph
+        nx.draw(G, pos, with_labels=True, node_color='lightblue', 
+                node_size=500, edge_color='gray', linewidths=1, 
+                font_size=15)
+
+        # If edge weights matrix is provided, add edge labels
+        if edge_weights_matrix is not None:
+            edge_labels = {(i, j): edge_weights_matrix[i][j] for i, j in G.edges if edge_weights_matrix[i][j] != 0}
+            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+
+        # Display the plot
+        plt.show()
+
 if __name__ == "__main__":
     # Example usage
     n = 5  # Number of nodes
@@ -112,12 +179,15 @@ if __name__ == "__main__":
     np.random.seed(1)
     random.seed(1)
 
-    adj_matrix, edge_weights = GraphDataset.generate_graph(n, p)
-    target = GraphDataset.shortest_path_length(edge_weights)
+    # adj_matrix, edge_weights = GraphDataset.generate_graph(n, p)
+    # target = GraphDataset.shortest_path_length(edge_weights)
 
     # print("Adjacency Matrix:\n", adj_matrix)
-    print("Edge Weights:\n", edge_weights)
-    print("Shortest Path Length from Node 0 to 1:", target)
+    # print("Edge Weights:\n", edge_weights)
+    # print("Shortest Path Length from Node 0 to 1:", target)
+
+    data = GraphDataset(num_samples=10, num_nodes=n, edge_prob=p, target_type="shortest_path", max_weight=10, graph_neg_weights=False, seed=1)
+
 
     test = np.array([
         [0., 0., 0., 0., 1., 0., 1.],
@@ -129,3 +199,4 @@ if __name__ == "__main__":
         [1., 0., 0., 0., 0., 1., 0.]
     ])
 
+    exit(1)

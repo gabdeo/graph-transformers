@@ -24,3 +24,10 @@ Do Transformers Really Perform Bad
 
 (2) https://arxiv.org/pdf/1905.12712.pdf
 Path-Augmented Graph Transformer Network
+
+Things to test:
+- Trying shortest path / coloring number
+- Trying MLP, GNN, Transformers
+- Attn mask (adjacency matrix)
+- Adding T_{in} connections
+- Changing number of GNN iterations/Transformer's attention layers (not nb. of heads)

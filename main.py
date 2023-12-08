@@ -6,8 +6,20 @@ from torch.utils.data import DataLoader
 from graph_transformers import Transformer, GraphDataset, AverageMeter
 from matplotlib import pyplot as plt 
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+
+
+
+def load_model(model_path, **transformer_params):
+    # Initialize the model (make sure it's the same architecture as the one trained)
+    model = Transformer(**transformer_params)  # Fill in the appropriate parameters
+    model.load_state_dict(torch.load(model_path))
+    model.eval()  # Set the model to evaluation mode
+    return model
+
 def train_base_transformer():
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     # Dataset params
     n = 10  # Number of nodes in the graph
@@ -27,7 +39,7 @@ def train_base_transformer():
     torch.manual_seed(seed)
     model = Transformer(dim=dimension, attn_dim=attn_dim, mlp_dim=mlp_dim, num_heads=n_heads, num_layers=num_layers, seq_len = n, out_dim = 1).to(device)
 
-    loss_fn = nn.MSELoss()  # Adjust the loss function based on your problem
+    loss_fn = nn.MSELoss()  
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     # Generate some random data
@@ -78,7 +90,7 @@ def train_base_transformer():
     plt.legend()
     plt.show()
 
-    return model
+    return model, dataset
 
 
 
@@ -133,7 +145,7 @@ def evaluate(dataloader, model, attn_mask, loss_fn, device):
     return test_loss, correct
 
 if __name__ == "__main__":
-    model = train_base_transformer()
+    model, dataset = train_base_transformer()
     torch.save(model.state_dict(), "model.pth")
     print("Saved PyTorch Model State to model.pth")
 
