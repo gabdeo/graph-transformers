@@ -31,3 +31,9 @@ Things to test:
 - Attn mask (adjacency matrix)
 - Adding T_{in} connections
 - Changing number of GNN iterations/Transformer's attention layers (not nb. of heads)
+- Positional encoding / not
+- Make epochs checkpoints (16, 32, 48?)
+
+Dataset:
+- Remove duplicate adjacency matrix?
+- Balance shortest path (or chromatic nb)
