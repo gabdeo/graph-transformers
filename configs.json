@@ -15,20 +15,19 @@
         "batch_size": 128,
         "learning_rate": 0.001
     },
-    "mlp_large":{
+    "mlp":{
         "num_layers":8,
         "layers_dim": 128,
         "epochs": 64
     },
+    "mlp_large":{
+        "num_layers":8
+    },
     "mlp_mid":{
-        "num_layers":4,
-        "layers_dim": 128,
-        "epochs": 64
+        "num_layers":4
     },
     "mlp_small":{
-        "num_layers":2,
-        "layers_dim": 128,
-        "epochs": 64
+        "num_layers":2
     },
     "gnn":{},
     "transformer":{
@@ -39,7 +38,7 @@
     },
     "transformer_small":{
         "num_layers": 2,
-        "epochs": 32
+        "epochs": 64
     },
     "transformer_mid":{
         "num_layers": 4,

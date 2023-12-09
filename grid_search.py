@@ -59,8 +59,8 @@ if __name__ == "__main__":
         #'min_coloring'
     ]
     sizes = [ 
-            # "small",
-            # "mid", 
+            "small",
+            "mid", 
             "large"
     ]
 
@@ -96,9 +96,9 @@ if __name__ == "__main__":
 
         for size in sizes:
             
-            mlp = MLPTrainer(dataset, **mlp_config)
+            mlp = MLPTrainer(dataset, **(mlp_config | all_configs[f"mlp_{size}"]))
             print(f"{size} MLP - Parameter count: ", sum(p.numel() for p in mlp.model.parameters() if p.requires_grad))
-            run_and_evaluate_model(mlp, plot = False, save_dir = f"results/{task}/mlp_large/")
+            run_and_evaluate_model(mlp, plot = False, save_dir = f"results/{task}/mlp_{size}/")
 
             # gnn = GNNTrainer(dataset, **gnn_config)
             # run_and_evaluate_model(gnn, plot = False, save_dir = f"results/{task}/gnn_{size}/")
@@ -114,7 +114,8 @@ if __name__ == "__main__":
 
         # Use adjaency matrix as attention mask
         print("Transformer with attn_mask")
-        transformer = TransformerTrainer(dataset, **(trans_config | all_configs[f"transformer_{selected_size}"]), seq_len = dataset_config["n"], attn_mask=True)
+        transformer = TransformerTrainer(dataset, **(trans_config | all_configs[f"transformer_{selected_size}"]), 
+                                         seq_len = dataset_config["n"], attn_mask=True)
         run_and_evaluate_model(transformer, plot = False, save_dir = f"results/{task}/transformer_attn_mask/")
 
         # positional encodings
