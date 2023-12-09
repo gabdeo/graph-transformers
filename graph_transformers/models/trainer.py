@@ -7,6 +7,7 @@ from graph_transformers.models.base_transformer import Transformer
 from graph_transformers.data import GraphDataset
 from matplotlib import pyplot as plt
 from abc import ABC
+from math import prod
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -41,7 +42,7 @@ class ModelTrainer(ABC):
 
 
     def train(self, plot = True):
-        loss_fn = nn.MSELoss()
+        loss_fn = nn.L1Loss()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate) # lr and optimizwer fixed for now
 
         train_loss_hist = []
@@ -108,11 +109,11 @@ class ModelTrainer(ABC):
 
         return loss.item()
 
-    def evaluate(self, dataloader = None, loss_fn = nn.MSELoss()):
+    def evaluate(self, dataloader = None, loss_fn = nn.L1Loss()):
         if dataloader is None:
             dataloader = self.test_dataloader
         
-        size = len(dataloader.dataset)
+        # size = len(dataloader.dataset)
         num_batches = len(dataloader)
         self.model.eval()
         loss, correct = 0, 0
@@ -120,9 +121,9 @@ class ModelTrainer(ABC):
             for X, y in dataloader:
                 pred = self.pass_data(X, y)
                 loss += loss_fn(pred, y.type(torch.float32)).item()
-                correct += (pred.round() == y).type(torch.float32).sum().item()
+                correct += (pred.round() == y).type(torch.float32).mean().item()
         loss /= num_batches
-        correct /= size
+        correct /= num_batches
         # print(f"Avg loss: {loss:>8f} \n")
         # print(f"Accuracy: {correct:>8f} \n")
 
@@ -161,7 +162,7 @@ class ModelTrainer(ABC):
 
 class TransformerTrainer(ModelTrainer):
     def __init__(self, dataset, batch_size, epochs, learning_rate, train_test_split, dim, attn_dim, mlp_dim,
-                 num_heads, num_layers, attn_mask = None, skip_connexion = "sum", seq_len=None, out_dim=None, seed = None):
+                 num_heads, num_layers, attn_mask: bool = False, positional_encodings: bool = False, skip_connexion = "sum", seq_len=None, out_dim=None, seed = None):
         super().__init__(dataset, batch_size, epochs, learning_rate, train_test_split, seed)
 
         # Initialize the Transformer model with specified parameters
@@ -175,11 +176,23 @@ class TransformerTrainer(ModelTrainer):
                                  skip_connexion=skip_connexion).to(self.device)
 
         self.model_type = 'transformer'
-        self.attn_mask = attn_mask if attn_mask else torch.ones(self.dataset.num_nodes, self.dataset.num_nodes)
+        self.encodings = positional_encodings
+        self.attn_mask = attn_mask
 
     def pass_data(self, X, y):
-        batch_size = X.shape[0]
-        attn_mask_batched = self.attn_mask.repeat(batch_size, 1, 1)
+        if self.encodings:
+            # Add onehot encoding to the input, as extra channel
+            onehot = torch.eye(self.dataset.num_nodes).to(self.device)
+            onehot = onehot.unsqueeze(0).unsqueeze(0).repeat(X.shape[0], 1, 1, 1)
+            X = torch.cat((X, onehot), dim=1)
+
+        if not self.attn_mask:
+            attn_mask_batched = None
+        else:
+            attn_mask_batched = X[:, 0, :, :].type(torch.float32).to(self.device)
+            # attn_mask_batched = attn_mask_batched.unsqueeze(1)
+            # attn_mask_batched = attn_mask_batched.repeat(1, X.shape[1], 1, 1)
+        
 
         X = X.permute((0, 2, 1, 3)).flatten(2, 3).type(torch.float32)
         X, y = X.to(self.device), y.to(self.device)
@@ -190,26 +203,30 @@ class TransformerTrainer(ModelTrainer):
 
 
 class MLPTrainer(ModelTrainer):
-    def __init__(self, dataset, batch_size, epochs, learning_rate, train_test_split, layers_dim, num_layers, out_dim = None, seed = None):
+    def __init__(self, dataset, batch_size, epochs, learning_rate, train_test_split, layers_dim, num_layers, out_dim, seed = None):
         super().__init__(dataset, batch_size, epochs, learning_rate, train_test_split, seed)
 
         # Initialize the MLP
+        input_shape = prod(el for el in dataset[0][0].shape) 
+
+        layers = []
         for layer in range(num_layers):
             if layer == 0:
-                self.model = nn.Linear(dataset.num_nodes * dataset.channels, layers_dim[layer])
-            else:
-                self.model = nn.Linear(layers_dim[layer-1], layers_dim[layer])
-            self.model = nn.Sequential(self.model, nn.ReLU())
-        
-        if out_dim:
-            self.model = nn.Linear(layers_dim[-1], out_dim)
-        else:
-            self.model = nn.Linear(layers_dim[-1], layers_dim)
+                linear = nn.Linear(input_shape, layers_dim)
+            else:            
+                linear = nn.Linear(layers_dim, layers_dim)
 
+            layers.append(linear)
+            layers.append(nn.ReLU())
+
+        output_layer = nn.Linear(layers_dim, out_dim)
+        layers.append(output_layer)
+        
+        self.model = nn.Sequential(*layers).to(self.device)
         self.model_type = 'mlp'
 
     def pass_data(self, X, y):
-        X = X.flatten(1, 2, 3).type(torch.float32)
+        X = X.flatten(1, 3).type(torch.float32)
         X, y = X.to(self.device), y.to(self.device)
 
         # Compute prediction and loss

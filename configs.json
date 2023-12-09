@@ -13,24 +13,29 @@
         "train_test_split": 0.6,
         "seed": 1,
         "batch_size": 128,
-        "epochs": 32,
         "learning_rate": 0.001
     },
-    "mlp":{},
+    "mlp":{
+        "num_layers":8,
+        "layers_dim": 128
+    },
     "gnn":{},
     "transformer":{
-        "attn_dim": 64,
-        "mlp_dim": 64,
-        "num_heads": 4,
+        "attn_dim": 128,
+        "mlp_dim": 256,
+        "num_heads": 8,
         "num_layers": 2
     },
     "transformer_small":{
-        "num_layers": 2
+        "num_layers": 2,
+        "epochs": 16
     },
     "transformer_mid":{
-        "num_layers": 5
+        "num_layers": 4,
+        "epochs": 32
     },
     "transformer_large":{
-        "num_layers": 10
+        "num_layers": 8,
+        "epochs": 64
     }
 }

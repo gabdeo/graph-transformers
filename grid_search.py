@@ -35,6 +35,9 @@ def run_and_evaluate_model(model_trainer, plot = False, save_dir = None):
     test_loss, test_acc = model_trainer.evaluate()
 
     if save_dir:
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+
         torch.save(model_trainer.model.state_dict(), os.path.join(save_dir, "model.pt"))
         # Save results
         with open(os.path.join(save_dir, "results.pkl"), 'wb') as f:
@@ -51,15 +54,15 @@ def run_and_evaluate_model(model_trainer, plot = False, save_dir = None):
 
 if __name__ == "__main__":
     
-    tasks = ['shortest_path', 
-             'min_coloring'
+    tasks = [
+        'shortest_path', 
+        #'min_coloring'
     ]
-    sizes = ["small", 
-             "mid", 
-             "large"
+    sizes = [ 
+            "small",
+            "mid", 
+            "large"
     ]
-
-    use_attn_mask = [False]
 
 
     for task in tasks:
@@ -77,24 +80,48 @@ if __name__ == "__main__":
         trans_config = all_configs['transformer'] | models_config
         trans_config["dim"] = dataset_config["n"] * dataset_config["channels"]
         
+        gnn_config = all_configs['gnn'] | models_config
+        mlp_config = all_configs['mlp'] | models_config
+
+
         if task == "min_coloring":
             trans_config["out_dim"] = 1 # Output is just chromatic number
+            mlp_config["out_dim"] = 1 
         
         elif task == "shortest_path":
             trans_config ["out_dim"] = dataset_config["n"] # Output is shortest path at each node from origin node
+            mlp_config["out_dim"] = dataset_config["n"]
 
-        gnn_config = all_configs['gnn'] | models_config
-        mlp_config = all_configs['mlp'] | models_config
+
 
         for size in sizes:
             if size == "large":
                 mlp = MLPTrainer(dataset, **mlp_config)
+                print(f"{size} MLP - Parameter count: ", sum(p.numel() for p in mlp.model.parameters() if p.requires_grad))
                 run_and_evaluate_model(mlp, plot = False, save_dir = f"results/{task}/mlp_large/")
 
             # gnn = GNNTrainer(dataset, **gnn_config)
             # run_and_evaluate_model(gnn, plot = False, save_dir = f"results/{task}/gnn_{size}/")
 
-            transformer = TransformerTrainer(dataset, **trans_config, seq_len = dataset_config["n"])
+            
+            transformer = TransformerTrainer(dataset, **(trans_config | all_configs[f"transformer_{size}"]), seq_len = dataset_config["n"], attn_mask=False)
+            print(f"{size} transformer - Parameter count: ", sum(p.numel() for p in transformer.model.parameters() if p.requires_grad))
             run_and_evaluate_model(transformer, plot = False, save_dir = f"results/{task}/transformer_{size}/")
         
-        
+        selected_size = "small"
+
+        # Use adjaency matrix as attention mask
+        print("Transformer with attn_mask")
+        transformer = TransformerTrainer(dataset, **(trans_config | all_configs[f"transformer_{selected_size}"]), seq_len = dataset_config["n"], attn_mask=True)
+        run_and_evaluate_model(transformer, plot = False, save_dir = f"results/{task}/transformer_attn_mask/")
+
+        # positional encodings
+        print("Transformer with positional encodings")
+        transformer = TransformerTrainer(dataset, **(trans_config | all_configs[f"transformer_{selected_size}"] | {"dim": 3 * dataset_config["n"]}), seq_len = dataset_config["n"], attn_mask=True, positional_encodings=True)
+        run_and_evaluate_model(transformer, plot = False, save_dir = f"results/{task}/transformer_pos_enc/")
+
+        # skip connextion (concat)
+        print("Transformer with skip connexion (concat)")
+        transformer = TransformerTrainer(dataset, **(trans_config | all_configs[f"transformer_{selected_size}"] | {"dim": 3 * dataset_config["n"]}), seq_len = dataset_config["n"], attn_mask=True, positional_encodings=True, skip_connexion="concat")
+        run_and_evaluate_model(transformer, plot = False, save_dir = f"results/{task}/transformer_skip_connexion/")
+

@@ -35,8 +35,10 @@ class GraphDataset(Dataset):
         self.graphs = []
         self.targets = []
         
-        for _ in range(num_samples):
+        while len(self.graphs) < num_samples:
             adjacency_matrix, edge_weights = self.generate_graph(num_nodes, edge_prob, max_weight)
+            if (adjacency_matrix.sum(axis = 1) == 0).any():
+                continue
             graph_data = torch.stack([
                 torch.from_numpy(adjacency_matrix), 
                 torch.from_numpy(edge_weights)

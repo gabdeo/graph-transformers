@@ -52,6 +52,12 @@ class AttentionHead(nn.Module):
 
         # Compute attention weights (alpha)
         alpha = F.softmax(attn_scores, dim=-1)
+        # if attn_mask is not None:
+        #     mask_all_zero = attn_mask.sum(dim=-1) == 0
+        #     alpha = alpha.masked_fill(mask_all_zero.unsqueeze(-1), 0.0)
+
+        if alpha.isnan().any().item() or alpha.isinf().any().item():
+            raise Exception("NaN or Inf in attention weights")
 
         # Compute the output as a weighted sum of the values
         out = torch.matmul(alpha, V)
@@ -112,19 +118,21 @@ class MultiHeadedAttention(nn.Module):
 
 
 class FFN(nn.Module):
-    def __init__(self, dim: int, n_hidden: int):
+    def __init__(self, dim: int, n_hidden: int, out_dim: int = None):
         """
         Args:
             dim: The input and output dimension of the FFN
             n_hidden: The hidden dimension of the FFN
         """
+        if not out_dim:
+            out_dim = dim
 
         super().__init__()
         self.net = nn.Sequential(
             nn.LayerNorm(dim),
             nn.Linear(dim, n_hidden),
             nn.GELU(),
-            nn.Linear(n_hidden, dim),
+            nn.Linear(n_hidden, out_dim),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -143,7 +151,7 @@ class AttentionResidual(nn.Module):
         super().__init__()
         self.attn = MultiHeadedAttention(dim, attn_dim, num_heads)
         if skip_connexion == "concat":
-            self.ffn = FFN(2 * dim, mlp_dim)
+            self.ffn = FFN(2 * dim, mlp_dim, dim)
         else:
             self.ffn = FFN(dim, mlp_dim)
 
@@ -163,14 +171,15 @@ class AttentionResidual(nn.Module):
         """
 
         attn_out, alphas = self.attn(x=x, attn_mask=attn_mask)
-        
+
         if self.skip_connexion == "sum":
             x = attn_out + x
-        elif self.skip_connexion == "concat":
-            x = torch.cat([attn_out, x], dim=-1)
             x = self.ffn(x) + x
+            
+        elif self.skip_connexion == "concat":
+            x_concat = torch.cat([attn_out, x], dim=-1)
+            x = self.ffn(x_concat) + x
         
-        x = self.ffn(x) + x
         return x, alphas
 
 
