@@ -1,15 +1,15 @@
-{   
-    "dataset":{
-        "n":10,
-        "seq_len":10,
-        "channels":2,
-        "edge_prob":0.5,
-        "max_weight":10,
-        "graph_neg_weights":false,
-        "seed":1,
-        "num_samples":50000
+{
+    "dataset": {
+        "n": 10,
+        "seq_len": 10,
+        "channels": 2,
+        "edge_prob": 0.5,
+        "max_weight": 10,
+        "graph_neg_weights": false,
+        "seed": 1,
+        "num_samples": 50000
     },
-    "models":{
+    "models": {
         "train_test_split": 0.6,
         "seed": 1,
         "batch_size": 128,
@@ -29,22 +29,30 @@
     "mlp_small":{
         "num_layers":2
     },
-    "gnn":{},
-    "transformer":{
+    "gnn": {
+        "epochs": 10,
+        "message_depth": 3,
+        "message_breadth": 16,
+        "update_depth": 2,
+        "update_breadth": 16,
+        "use_x_i": false,
+        "aggr": "min"
+    },
+    "transformer": {
         "attn_dim": 128,
         "mlp_dim": 256,
         "num_heads": 8,
         "num_layers": 2
     },
-    "transformer_small":{
+    "transformer_small": {
         "num_layers": 2,
         "epochs": 64
     },
-    "transformer_mid":{
+    "transformer_mid": {
         "num_layers": 4,
         "epochs": 64
     },
-    "transformer_large":{
+    "transformer_large": {
         "num_layers": 8,
         "epochs": 64
     }

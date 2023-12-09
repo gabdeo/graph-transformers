@@ -280,7 +280,7 @@ class MLPTrainer(ModelTrainer):
         return pred
 
 
-class GNNTrainer:
+class GNNTrainer(ModelTrainer):
     def __init__(
         self,
         dataset,
@@ -288,6 +288,7 @@ class GNNTrainer:
         epochs,
         learning_rate,
         train_test_split,
+        num_nodes,
         num_iter,
         message_depth,
         message_breadth,
@@ -304,6 +305,7 @@ class GNNTrainer:
 
         # Initialize the Transformer model with specified parameters
         self.model = GNN(
+            num_nodes,
             num_iter,
             message_depth,
             message_breadth,
