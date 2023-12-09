@@ -36,10 +36,9 @@ class GNNLayer(MessagePassing):
         self.update_mlp = update_mlp
 
     def forward(self, batch):
-        # Pass x to propagate if use_x_i is True
-        x = batch.x if self.use_x_i else None
+        # Pass message to propagate
         return self.propagate(
-            edge_index=batch.edge_index, x=x, edge_weight=batch.edge_attr
+            edge_index=batch.edge_index, x=batch.x, edge_weight=batch.edge_attr
         )
 
     def message(self, x_i, x_j, edge_weight):
@@ -58,6 +57,7 @@ class GNNLayer(MessagePassing):
 class GNN(nn.Module):
     def __init__(
         self,
+        num_nodes,
         num_iter,
         message_depth,
         message_breadth,
@@ -83,7 +83,7 @@ class GNN(nn.Module):
             ]
         )
         if out_dim:
-            self.output_mlp = MLP(batch.num_graphs, out_dim, 2, 2 * batch.num_graphs)
+            self.output_mlp = MLP(num_nodes, out_dim, 2, 2 * num_nodes)
         self.out_dim = out_dim
 
     def forward(self, batch):
@@ -186,6 +186,7 @@ if __name__ == "__main__":
 
     # Initialize the BFGNN model
     SETTINGS = {
+        "num_nodes": 4,
         "num_iter": 4,  # For a graph with 4 nodes
         "message_depth": 3,
         "message_breadth": 16,
