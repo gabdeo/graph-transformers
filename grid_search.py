@@ -59,8 +59,8 @@ if __name__ == "__main__":
         #'min_coloring'
     ]
     sizes = [ 
-            "small",
-            "mid", 
+            # "small",
+            # "mid", 
             "large"
     ]
 
@@ -95,20 +95,22 @@ if __name__ == "__main__":
 
 
         for size in sizes:
-            if size == "large":
-                mlp = MLPTrainer(dataset, **mlp_config)
-                print(f"{size} MLP - Parameter count: ", sum(p.numel() for p in mlp.model.parameters() if p.requires_grad))
-                run_and_evaluate_model(mlp, plot = False, save_dir = f"results/{task}/mlp_large/")
+            
+            mlp = MLPTrainer(dataset, **mlp_config)
+            print(f"{size} MLP - Parameter count: ", sum(p.numel() for p in mlp.model.parameters() if p.requires_grad))
+            run_and_evaluate_model(mlp, plot = False, save_dir = f"results/{task}/mlp_large/")
 
             # gnn = GNNTrainer(dataset, **gnn_config)
             # run_and_evaluate_model(gnn, plot = False, save_dir = f"results/{task}/gnn_{size}/")
 
-            
+            if size == "large":
+                # Don't retrain large transformer
+                continue
             transformer = TransformerTrainer(dataset, **(trans_config | all_configs[f"transformer_{size}"]), seq_len = dataset_config["n"], attn_mask=False)
             print(f"{size} transformer - Parameter count: ", sum(p.numel() for p in transformer.model.parameters() if p.requires_grad))
             run_and_evaluate_model(transformer, plot = False, save_dir = f"results/{task}/transformer_{size}/")
         
-        selected_size = "small"
+        selected_size = "mid"
 
         # Use adjaency matrix as attention mask
         print("Transformer with attn_mask")
@@ -117,11 +119,13 @@ if __name__ == "__main__":
 
         # positional encodings
         print("Transformer with positional encodings")
-        transformer = TransformerTrainer(dataset, **(trans_config | all_configs[f"transformer_{selected_size}"] | {"dim": 3 * dataset_config["n"]}), seq_len = dataset_config["n"], attn_mask=True, positional_encodings=True)
+        transformer = TransformerTrainer(dataset, **(trans_config | all_configs[f"transformer_{selected_size}"] | {"dim": 3 * dataset_config["n"]}), 
+                                         seq_len = dataset_config["n"], attn_mask=True, positional_encodings=True)
         run_and_evaluate_model(transformer, plot = False, save_dir = f"results/{task}/transformer_pos_enc/")
 
         # skip connextion (concat)
         print("Transformer with skip connexion (concat)")
-        transformer = TransformerTrainer(dataset, **(trans_config | all_configs[f"transformer_{selected_size}"] | {"dim": 3 * dataset_config["n"]}), seq_len = dataset_config["n"], attn_mask=True, positional_encodings=True, skip_connexion="concat")
+        transformer = TransformerTrainer(dataset, **(trans_config | all_configs[f"transformer_{selected_size}"] | {"dim": 3 * dataset_config["n"]}), 
+                                         seq_len = dataset_config["n"], attn_mask=True, positional_encodings=True, skip_connexion="concat")
         run_and_evaluate_model(transformer, plot = False, save_dir = f"results/{task}/transformer_skip_connexion/")
 
