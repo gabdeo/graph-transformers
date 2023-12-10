@@ -10,7 +10,7 @@ To maintain fair comparisons, the MLP and the Transformer were designed to have 
 
 Our GNNs demonstrated exceptional performance on the shortest path task. Tailoring the model's architecture to this problem (using maximum aggregation and initializing node features appropriately) likely contributed to this success. However, several interesting observations emerged from our results. We compared GNNs of three different sizes: small (2 iterations, 13k parameters), medium (5 iterations, 32k parameters), and large (10 iterations, 64k parameters).
 
-![Alt text](results\comparative_plots\gnn_train_loss.svg "GNN Val Loss")
+![Alt text](results/comparative_plots/gnn_train_loss.svg "GNN Val Loss")
 <div class="mt-3">
     {% include figure.html path="assets/img/2023-11-08-graphs-transformers/comparative_plots/gnn_val_loss.svg" class="img-fluid rounded z-depth-1" %}
 </div>
