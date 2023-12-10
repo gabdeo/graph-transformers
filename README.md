@@ -1,3 +1,285 @@
+---
+layout: distill
+title: Graph Transformers
+description: A study of Transformers' understanding of fundamental graph problems, where we propose a new, tailored architecture highlighting the model's potential in graph-related tasks.
+
+
+date: 2023-12-09
+htmlwidgets: true
+
+# Anonymize when submitting
+authors:
+  - name: Tristan Magnin
+    affiliations:
+      name: MIT
+  - name: Gabriel Deo
+    affiliations:
+      name: MIT
+
+
+# must be the exact same name as your blogpost
+bibliography: 2023-12-09-graphs-transformers.bib  
+
+# Add a table of contents to your post.
+#   - make sure that TOC names match the actual section names
+#     for hyperlinks within the post to work correctly.
+toc:
+  - name: Motivation & Project outline
+  - name: Introduction & Literature review
+  - name: Graph Transformer Model Design
+    subsections:
+    - name: Vanilla Transformer
+    - name: Tokenization Approach and Positional Encoding
+    - name: Attention in Graph Transformers - the Necessity of a Skip-Connection
+    - name: Model Architecture Overview
+  - name: Methodology for Training and Evaluation
+    subsections:
+    - name: Constructing the Dataset
+    - name: Training Protocols
+    - name: Metrics and Evaluation Criteria
+  - name: Results and Comparative Analysis
+    subsections:
+    - name: GNN performance
+    - name: MLP Performance
+    - name: Transformer performance
+    - name: Transformer with Attention Mask, Positional Encoding & Skip Connection
+  - name: Conclusion
+
+
+# Below is an example of injecting additional post-specific styles.
+# This is used in the 'Layouts' section of this post.
+# If you use this post as a template, delete this _styles block.
+_styles: >
+  .fake-img {
+    background: #bbb;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 0px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 12px;
+  }
+  .fake-img p {
+    font-family: monospace;
+    color: white;
+    text-align: left;
+    margin: 12px 0;
+    text-align: center;
+    font-size: 16px;
+  }
+---
+
+## Motivation & Project outline
+
+Our project aims to advance the understanding of Transformers in graph theory, focusing on the Shortest Path Problem, a cornerstone of graph theory and Dynamic Programming (DP). We introduce a custom Graph Transformer architecture, designed to tackle this specific challenge. Our work begins with a theoretical demonstration that the shortest path problem is Probably Approximately Correct (PAC)-learnable by our Graph Transformer. We then empirically test its performance, comparing it against simpler models like Multilayer Perceptrons (MLPs) and sophisticated benchmarks like Graph Neural Networks (GNNs). This study seeks to validate the Graph Transformer as an effective tool for solving fundamental graph-based problems, and "simple" DP problems in particular.
+
+<div class="row align-items-center mt-3">
+    <div class="col-sm mt-3 mt-md-0">
+        {% include figure.html path="assets/img/2023-11-08-graphs-transformers/erdos_renyi.svg" class="img-fluid rounded z-depth-1" %}
+    </div>
+    <div class="col-sm mt-3 mt-md-0">
+        {% include figure.html path="assets/img/2023-11-08-graphs-transformers/transformer-architecture-diagram.png" class="img-fluid rounded z-depth-1" %}
+    </div>
+</div>
+<div class="caption mt-3">
+    Left: example of an Erdős–Rényi graph, right: original Transformer architecture 
+</div>
+
+## Introduction & Literature review
+
+Transformers have shown significant effectiveness in domains that require an understanding of long-range dependencies and contextual information. Originally prominent in natural language processing<d-cite key="devlin2018bert"></d-cite>, their applications have expanded to include areas such as computer vision<d-cite key="dosovitskiy2020image"></d-cite> and speech recognition<d-cite key="wang2020transformer"></d-cite>. Recent explorations have also delved into Transformers' abilities in mathematical tasks like arithmetic, GCD computations, and matrix operations<d-cite key="DBLP:journals/corr/abs-2112-01898"></d-cite><d-cite key="charton2023transformers"></d-cite><d-cite key="lample2019deep"></d-cite>, shedding light on the learning mechanisms of these models.
+
+A particular area of interest within these applications is graph problems. Recent research has assessed Transformers' performance in this domain<d-cite key="DBLP:journals/corr/abs-2106-05234"></d-cite> and explored adapting the Transformer architecture to fit the context of graph problems<d-cite key="DBLP:journals/corr/abs-1905-12712"></d-cite>. However, much of the current research does not focus on Transformers' comprehension of fundamental graph challenges, such as the shortest path problem. Notably, in the studies mentioned above, the shortest path is often directly input as a matrix, with each entry $i,j$ representing the shortest path distance between nodes $i$ and $j$. Our study will investigate Transformers' performance on "raw" graph data, where only edge weights, the adjacency matrix, and positional encodings are provided. The Transformer will be trained to predict the shortest path from a designated node 0 to all other nodes, in the form of an $n\times1$ vector<d-cite key="DBLP:journals/corr/abs-1905-13211"></d-cite>.
+
+We will demonstrate that, by adapting the Transformer architecture for our purposes, the shortest path problem and other "simple" dynamic programming (DP) challenges are Probably Approximately Correct (PAC)-learnable by the model. Our approach is based on the framework developed for GNNs<d-cite key="DBLP:journals/corr/abs-1905-13211"></d-cite> and adapted to our Graph Transformer.
+
+## Graph Transformer Model Design
+
+Let's dive into our Graph Transformer model, drawing inspiration from the classical Transformer architecture. 
+
+### Vanilla Transformer
+
+We first recall the vanilla architecture of Transformers, described in <d-cite key="DBLP:journals/corr/VaswaniSPUJGKP17"></d-cite>, which is fundamentally built on two key ideas: tokenization and attention, both of which we adapt for graph data.
+
+In our context, think of tokens like the attributes of nodes in Graph Neural Networks (GNNs). These tokens are packets of information, allowing transformers to handle diverse data types, including graphs. The process begins with a token net, which is a sequence of linear and non-linear layers. This is somewhat equivalent to the alternating aggregation and combination stages in a GNN, where each node processes and integrates information from its neighbors.
+
+The real game-changer in transformers, however, is the attention mechanism, layered on top of the token net. This mechanism involves a set of matrices known as query, key, and value. These matrices enable tokens to use information from the nodes they're paying attention to, in order to learn and update their own values.
+
+Here's a simple way to visualize it. Imagine each token in the transformer scanning the entire graph and deciding which nodes (or other tokens) to focus on. This process is driven by the query-key-value matrices. Each token creates a 'query', which is then matched against 'keys' from other tokens. The better the match, the more attention the token pays to the 'value' of that other token. Mathematically, this can be expressed as:
+
+$$Attention(Q, K, V) = softmax \left(\frac{QK^T}{\sqrt{d_k}} \right)V$$
+
+In this formula, $ Q $, $ K $, and $ V $ represent the query, key, and value matrices, respectively. The term $ \sqrt{d_k} $ is a scaling factor based on the dimensionality of the keys.
+
+While the process in Graph Neural Networks (GNNs) might seem similar, there's an essential distinction to be made. In GNNs, the flow of information is local, with nodes exchanging information with their immediate neighbors. However, in our Graph Transformer model, we employ self-attention to potentially allow each node (or token) to consider information from the entire graph. This includes nodes that might be several steps away in the graph structure.
+
+One axe of our research is then to explore the potential benefits - or drawbacks - of this global perspective, and seeing how leveraging global information compares to the traditional local feature aggregation used in GNNs, in the context of graph theory challenges like the Shortest Path Problem. By enabling each node to have a broader view of the entire graph, we're exploring how this approach influences the prediction quality (Accuracy) and the efficiency of path computations, specifically focusing on the speed at which the network adapts and learns (Training Efficiency).
+
+A full Transformer will be a sequence of self-attention layers and MLPs. We now turn to the specifics of how we implement it, starting with tokenization.
+
+
+### Tokenization Approach and Positional Encoding
+
+The first step in our model is converting graph information (including nodes, edges, and their weights) into a format suitable for transformers. We've developed a method to encode this graph data into tokens.
+
+Each token in our system is a vector with a length of $2n$. Here, $n$ represents the number of nodes in the graph. Half of this vector contains binary values indicating whether a connection exists to other nodes (1 for a connection, 0 for no connection). The other half of the vector holds the weights of these edges.
+
+$$ \text{Token} = [\text{Edge Connections (Binary Values)}, \text{Edge Weights}] = [\mathbf{a}, \mathbf{w}] $$
+
+This structure seems sufficient to capture the essential structure of the graph. But, to further aid the transformer in identifying the shortest path, we can introduce additional local information into these tokens through positional encoding. Encoding positional information of the nodes has already be achieved in various ways, for example, using graph kernels <d-cite key="DBLP:journals/corr/abs-2106-05667"></d-cite>. Here we choose a simpler onehot encoding method : we assign an arbitrary rank to each node and include an indicator vector within the token. This vector, also of size $n$, points to the node's position. With this addition, each token becomes a vector of size $3n$:
+
+$$ \text{Token} = [\text{Edge Connections}, \text{Edge Weights}, \text{Positional Encoding}] = [\mathbf{a}, \mathbf{w}, \mathbf{1}] $$
+
+We plan to rigorously test both approaches as part of our diverse model lineup. 
+
+## Attention in Graph Transformers - the Necessity of a Skip-Connection
+
+The Query-Key-Value (QKV) Attention Mechanism is a pivotal aspect of how Graph Transformers can effectively learn the Shortest Path Problem. Building on the insights from Dudzik et al. <d-cite key="dudzik2022graph"></d-cite>, who illustrated the capacity of GNNs to tackle Dynamic Programming challenges, including the Shortest Path Problem, we delve into how Transformers might achieve similar feats using attention.
+
+Recall the Bellman-Ford algorithm's key update step for the Shortest Path Problem, expressed as:
+
+$$d_i^{k+1} = \min_j d_j^k + w_{i, j}$$
+
+In this context, our hypothesis is that Transformers could replicate this dynamic through the attention mechanism, which we prove mathematically in Appendix A. The key observation is that the softmax layer would be able to mimic the $ \min $ operator, as long as the query-key cross product is able to retrieve $d_j + w_{i,j}$ for all nodes $i,j$. Intuitively, this can be done if each query token $i$ picks up on the node's positional encoding, and each key token $j$ on the node's current shortest path value $d_j$ and edges values $w_j$. Taking the cross product of the onehot encoding $i$ with edges values $w_j$ would then return exactly $w_{i,j}$ for all $i,j$. To select only seighboring connections, we'll use an appropriated attention mask. 
+
+<!-- Imagine queries being tailored to pinpoint the positional encoding of node $i$, while keys focus on the edge value $w_{i,j}$ between node $i$ and its neighbor $j$, as well as the connections $a_j$ which inform about the current shortest distance $d_j$. The attention would concentrate on neighbors, considering both the edge weights and the current shortest distances of these neighbors. The softmax step in the attention mechanism would then allow the token for node $i$ to zero in on the neighbor that minimizes a combination of edge weight and actual distance, paralleling the logic in the Bellman-Ford algorithm.  -->
+
+However, there is a catch. The learning process might not fully grasp the Bellman-Ford update using the attention mechanism alone. After the attention picks up on the correct minimizer neighbour token $j$, it needs to update the the current node $i$'s values. 
+The Bellman-Ford update isn't a simple operation on the tokens like a sum. For instance, we only want $d_i^k$ to change, and we want to update it with the correct $w_{i,j}$. This is where the idea of incorporating a skip-connection mechanism comes into play. By concatenating tokens $i$ (the input) and $j$ (the attention's output) before feeding them to the MLP layer following the self-attention layer, we could effectively emulate the Bellman-Ford update process. 
+
+Overall, combining attention and skip-connection could ensure our Graph Transformer can comprehensively learn and apply the Bellman-Ford logic to solve the Shortest Path Problem. We offer a mathematical proof of this concept in Appendix A, using a slightly different tokenization method.
+
+Additionally, it's worth considering that our Graph Transformer might be learning an entirely distinct logical process for solving the Shortest Path Problem. Still, proving that such a logic is within the model's grasp underlines the model's versatility in addressing some graph-related and/or dynamic programming challenges. We'll tackle this notion in the next part about learnability and algorithmic alignment.
+
+### Model Architecture Overview
+
+
+In this section, we revisit the architecture of our Graph Transformer, which is an adaptation of the standard Transformer model. Our model is composed of a sequence of self-attention layers and MLPs, each augmented with a skip-connection. The tokens in our model encapsulate both edge connections and their corresponding weights, alongside positional encoding. 
+
+The most notable feature of our architecture is the introduction of the attention mask. This mask restricts the attention of each token to its immediate neighbors, aligning our approach more closely with the local message-passing process typical in GNNs. The inclusion or not of this feature and the resultant effect in our architecture marks the crucial difference between the global vs. local token aggregation methodologies that we discussed earlier.
+
+
+## A measure of learnability
+
+Our project falls into the wider research interest in the interaction between network structures and specific tasks. While basic and common structures such as MLPs are known to be universal approximators, their effectiveness varies based on the amount of data required for accurate approximations. Notably, their out-of-sample performance often lags behind task-specific architectures, such as Graph Neural Networks (GNNs) in graph-related problems, which highlights the issue of a network's generalization capacity.
+
+To evaluate theoretically the ability of transformers to effectively learn the Shortest Path Problem and similar challenges, we position our study within the framework of PAC (Probably Approximately Correct) Learning. This framework allows us to explore the concept of algorithmic alignment. Algorithmic alignment is here crucial as it pertains to a model's capability to emulate a given algorithm with a minimal number of modules, each of relatively low complexity. Such approach has already been taken by Xu et. al <d-cite key="DBLP:journals/corr/abs-1905-13211"></d-cite> to give a better understanding of the reasoning process of complex networks like GNNs, and it is instrumental in assessing the adaptability and efficiency of transformers in learning and solving complex graph-based tasks.
+
+### Algorithmic Alignment
+
+In this section, we delve into a series of definitions to establish the mathematical groundwork of our investigation.
+
+We first recall a definition of the PAC-Learnibility:
+
+#### Definition (PAC learning and sample complexity)
+
+Let $$\{x_i,y_i\}_{i=1}^M$$ be i.i.d. samples from some distribution $ \mathcal{D} $, and suppose $ y_i = g(x_i) $ for some underlying function $ g $. Let $$ f = \mathcal{A}(\{x_i, y_i\}_{i=1}^M) $$ be the function generated by a learning algorithm $ \mathcal{A} $. Then $ g $ is $ (M, \epsilon, \delta) $-learnable with $ \mathcal{A} $ if
+
+$$ \mathbb{P}_{x \sim \mathcal{D}} [\| f(x) - g(x) \| \leq \epsilon] \geq 1 - \delta $$
+
+where $ \epsilon > 0 $ is the error parameter and $ \delta \in (0, 1) $ the failure probability.
+
+We then define the *sample complexity* as $$ \mathcal{C_A}(g, \epsilon, \delta) = \min M $$ for every $ M $ such that $ g $ is $ (M, \epsilon, \delta) $-learnable with $ \mathcal{A} $.
+
+This is a crucial concept in computational learning theory that helps us understand the feasibility of learning a given function from a set of examples to a certain degree of approximation, with a certain level of confidence.
+
+Next, we outline a definition that connects the concepts of function generation with the architecture of neural networks.
+
+#### Definition (Generation)
+Let $ f_1, \ldots, f_n $ be module functions, $ g $ a reasoning function and $ \mathcal{N} $ a neural network.
+We say that $ f_1, \ldots, f_n $ generate $ g $ for $ \mathcal{N} $, and we write $$f_1, \ldots, f_n \underset{\mathcal{N}}{\equiv} g$$ if, by replacing $ \mathcal{N}_i $ with $ f_i $, the network $ \mathcal{N} $ simulates $ g $.
+
+Using these ideas, we then introduce a key point for our project: algorithmic alignment, which we intend to validate for Transformers applied to the Shortest Path Problem.
+
+#### Definition (Algorithmic alignment)
+Consider a neural network $ \mathcal{N} $ with $ n $ modules $$ \mathcal{N}_i $$ that tries to approximate a reasoning function $ g $. Suppose that there exists $ f_1, \ldots, f_n $ some module functions such that $$f_1, \ldots, f_n \underset{\mathcal{N}}{\equiv} g$$.
+Then $ \mathcal{N} $ is $ (M, \epsilon, \delta) $-algorithmically aligned with $ g $ there are learning algorithms $$ \mathcal{A}_i $$ for the $$ \mathcal{N}_i $$'s such that $$ n \cdot \max_i \mathcal{C}_{\mathcal{A}_i} (f_i, \epsilon, \delta) \leq M $$.
+
+A small number of sample $ M $ would then imply good algorithmic alignment, i.e. that the algorithmic steps $f_i$ to simulate g are _easy to learn_.
+
+Finally, we state the following theorem, proven by Xu et al. <d-cite key="DBLP:journals/corr/abs-1905-13211"></d-cite> It provides evidence that generalization benefits from algorithmic alignment. 
+
+#### Theorem 1 (Algorithmic alignment improves sample complexity) 
+Fix $\varepsilon$ and $\delta$. Suppose $\{x_i, y_i\} \sim D$, where $|x_i| < N$, and $y_i = g(S_i)$ for some $g$. Suppose $\mathcal{N}_1, \dots \mathcal{N}_n$ are $\mathcal{N}$'s MLP modules in sequential order. Suppose $\mathcal{N}$ and $g$ algorithmically align via functions $f_1, ..., f_n$, as well as the following assumptions.
+
+*__i. Algorithm stability__*. Let $\mathcal{A}$ be the learning algorithm for the $$\mathcal{N}_i$$'s. Suppose $$f = \mathcal{A}(\{x_i, y_i\}^M_{i=1})$$, $$\hat{f} = \mathcal{A}(\{\hat{x}_i, y_i\}^M_{i=1})$$. For any x, $$\|f(x) - f(\hat{x})\| < L_0 \cdot \max_i\|x_i - \hat{x}_i\|$$, for some $$L_0$$.
+
+*__ii. Sequential learning__*. We train the $$\mathcal{N}_i$$'s sequentially. The inputs for $\mathcal{N}_j$ are the outputs from the previous modules $$\mathcal{N}_1, \dots, \mathcal{N}_{j-1}$$, while labels are generated by the correct functions $$f_{1}, ..., f_{j-1}$$.
+
+*__iii. Lipschitzness__*. The learned functions $f_j$ satisfy $$\|f_j(x) - f_j(z)\| \leq L_1\|x - z\|$$, for some $L_1$.
+
+Then g is learnable by N.
+
+
+### Application to Transformers
+
+We now apply this theoretical framework to Transformers. The justifications of the results in this part will be a combination of sketch of mathematical proofs and empirical evidence.
+We first state a first result:
+
+#### Lemma 1 (Transformers algorithmically align with the Shortest Path Problem)
+Let  $ \mathcal{T} $ be a Transformer, let $ g $ be the reasoning function of the Shortest Path Problem applied to a graph with $n$ nodes. Then $ \mathcal{T} $ is algorithmically aligned with $ g $.
+
+We can directly prove this lemma.
+Let $ f_1, \ldots, f_n $ be the Bellman-Ford update processes of the Shortest Path Problem: 
+$$d_u^{k+1} = \min_{v \in \mathcal{N}(u)} d_v^{k} + c(u, v)$$  where $\mathcal{N}(u)$ is the set of neighbors of node $u$. 
+From Bellman-Ford algorithm, we have: $$f_1, \ldots, f_n \underset{\mathcal{T}}{\equiv} g$$, with $g$ being the shortest path function.
+
+Then, from our discussion on Transformers attention layers and proof in Appendix A, each attention-MLP sequence $\mathcal{N}_i$ has a learning algorithm $\mathcal{A}_i$ such that $f_i$ is learnable with $\mathcal{A}_i$. Each sample complexity is then bounded by M, which concludes the proof.
+
+
+We can now state the following theorem:
+#### Theorem 2 (Transformers can learn the Shortest Path Problem)
+Let  $ \mathcal{T} $ be a Transformer, let $ g $ be the shortest path function. Then, $g$ is learnable by $\mathcal{T}$.
+
+We provide here a sketch of a proof of this theorem.
+From Lemma 1, $\mathcal{T}$ and $g$ algorithmically align via $f_1, \ldots, f_n$.
+We must now check the 3 assumptions of Theorem 1. 
+
+Sequential Learning __(ii)__ is clearly true, since transformers architectures incorporate sequence of MLPs (associated with attention layers). Li et al <d-cite key="li2023transformers"></d-cite> have provided an empirical proof of the algorithm stability __(i)__ of transformers. Finally, considering a self-attention token network combined with a ReLU-MLP for each layer of $\mathcal{T}$, every function in the related learning algorithm $\mathcal{A}_i$ (softmax, ReLU, Linear) is Lipschitz-continuous, hence their combination is Lipschitz-continuous too, which validates Assumption __(iii)__.
+
+We can then apply Theorem 1 and conclude the proof.
+
+
+Having laid the theoretical foundation for our problem, we now turn our attention to the practical application, where we employ our Graph Transformer to the concrete task of learning and solving the Shortest Path Problem.
+
+## Methodology for Training and Evaluation
+### Constructing the Dataset
+
+For training and evaluating our different models, we generate a comprehensive dataset comprising 50,000 samples, each representing a graph. These graphs were randomly created following the Erdős–Rényi model, specifically the $\mathcal{G}(n, p)$ variant, where `n` represents the number of nodes and `p` is the probability of edge formation between any two nodes. In our dataset, each graph consists of 10 nodes (`n = 10`), and the edge probability (`p`) is set at 0.5. This setting ensures a balanced mix of sparsely and densely connected graphs, providing a robust testing ground for the Graph Transformer's ability to discern and compute shortest paths under varied connectivity scenarios .
+
+Furthermore, we assign to the edges in these graphs some weights that are integral values ranging from 1 to 10. This range of weights introduces a second layer of complexity to the shortest path calculations, as the Graph Transformer must now navigate not only the structure of the graph but also weigh the cost-benefit of traversing various paths based on these weights. The inclusion of weighted edges makes the dataset more representative of real-world graph problems, where edges often have varying degrees of traversal difficulty or cost associated with them.
+
+This dataset is designed to challenge and evaluate the Graph Transformer's capability in accurately determining the shortest path in diverse graph structures under different weight conditions. The small number of nodes ensures a wide variability in the degree of connectivity in a sample graph. It also allows for an initial performance evaluation on smaller-scale problems, with the potential to extend these studies to larger-scale graphs in the future. Hence, the dataset's structure supports a comprehensive assessment of the model's performance and its adaptability to a wide range of graph-related scenarios.
+
+<div class="mt-3">
+    {% include figure.html path="assets/img/2023-11-08-graphs-transformers/shortest_path_counts.svg" height = "50%" width = "50%" class="img-fluid rounded z-depth-1" %}
+</div>
+<div class="caption mt-3">
+    Shortest path distribution for our entire dataset (50,000 samples)
+</div>
+
+
+### Training Protocols
+
+In the fixed dataset approach we've employed, the dataset is pre-constructed with 50,000 graph samples and remains unchanged throughout the training process. This method, involving a consistent 60/20/20 split for training, validation, and testing, ensures that every model is assessed under the same conditions at each epoch. This consistency is crucial for our primary goal: to compare the performance of different models or architectures in a controlled and repeatable manner. To an on-the-fly approach, where data is dynamically generated during each training epoch, introduces more variability. This variability can be beneficial in a second step for thoroughly testing the robustness and adaptability of a single model, as it faces new and diverse scenarios in each epoch. However, for our first objective of directly comparing different models, the fixed dataset approach provides a more stable and reliable framework to begin with.
+
+We use the Adam Optimizer because it's good at handling different kinds of data and works efficiently.  The learning rate is set at a standard value of 0.001, which serves as a common and reliable starting point, ensuring a consistent basis for comparing the learning performance across all models.
+
+Our main tool for measuring success is the L1 loss function. This function is suited for our shortest path problem because it treats all mistakes the same, whether they're big or small. It's different from the L2 loss, which is harsher on bigger mistakes. This way, our model pays equal attention to finding shorter and longer paths correctly.
+
+### Metrics and Evaluation Criteria
+
+We use two main metrics to check how good our models perform: L1 Loss and Accuracy. L1 Loss adds up all the differences between the predicted and actual path costs across all nodes. It's a direct way to see how well the model is doing.
+
+$$ L1 \, Loss = \frac{1}{N} \sum_{i=1}^{N} |y_i - \hat{y}_i| $$
+
+where $ N $ is the total number of nodes, $ y_i $ is the actual path cost for the $i$-th node, and $ \hat{y}_i $ is the predicted path cost for the $i$-th node.
+
+
+Accuracy is the second measure. It shows what percentage of nodes the model got exactly right in predicting the shortest path. It's a simple way to understand how precise our model is.
+
+$$ Accuracy = \frac{\text{Number of Correct Predictions}}{\text{Total Number of Predictions}} \times 100\% $$
+
+Here, a prediction is counted as "correct" if its rounded value is the true shortest path. I.e., if the model predicts 10.3 for a node, but the true sortest path is 11, this is marked as incorrect. If it predicts 10.7, it will be counted as correct.
+
+Together, these two measures help us see how well our Graph Transformer is doing compared to other models like MLPs and GNNs, especially in solving shortest path problems in graphs.
 
 ## Results and Comparative Analysis
 
@@ -10,7 +292,10 @@ To maintain fair comparisons, the MLP and the Transformer were designed to have 
 
 Our GNNs demonstrated exceptional performance on the shortest path task. Tailoring the model's architecture to this problem (using maximum aggregation and initializing node features appropriately) likely contributed to this success. However, several interesting observations emerged from our results. We compared GNNs of three different sizes: small (2 iterations, 13k parameters), medium (5 iterations, 32k parameters), and large (10 iterations, 64k parameters).
 
-![Alt text](results/comparative_plots/gnn_train_loss.svg "GNN Val Loss")
+
+<div class="mt-3">
+    {% include figure.html path="assets/img/2023-11-08-graphs-transformers/comparative_plots/gnn_train_loss.svg" class="img-fluid rounded z-depth-1" %}
+</div>
 <div class="mt-3">
     {% include figure.html path="assets/img/2023-11-08-graphs-transformers/comparative_plots/gnn_val_loss.svg" class="img-fluid rounded z-depth-1" %}
 </div>
@@ -112,23 +397,3 @@ Overall, our exploration sheds light on the potential of Transformers in graph-r
 
 
 
-
-
-(1) https://arxiv.org/pdf/2106.05234.pdf
-Do Transformers Really Perform Bad
-
-(2) https://arxiv.org/pdf/1905.12712.pdf
-Path-Augmented Graph Transformer Network
-
-Things to test:
-- Trying shortest path / coloring number
-- Trying MLP, GNN, Transformers
-- Attn mask (adjacency matrix)
-- Adding T_{in} connections
-- Changing number of GNN iterations/Transformer's attention layers (not nb. of heads)
-- Positional encoding / not
-- Make epochs checkpoints (16, 32, 48?)
-
-Dataset:
-- Remove duplicate adjacency matrix?
-- Balance shortest path (or chromatic nb)
