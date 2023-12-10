@@ -11,6 +11,10 @@ from torch_geometric.data import Batch
 class MLP(nn.Module):
     def __init__(self, input_dim, output_dim, depth, breadth):
         super(MLP, self).__init__()
+        if depth == 1:
+            self.mlp = nn.Linear(input_dim, output_dim)
+            return
+
         layers = [nn.Linear(input_dim, breadth), nn.ReLU()]
         for _ in range(depth - 1):
             layers.append(nn.Linear(breadth, breadth))
@@ -20,6 +24,83 @@ class MLP(nn.Module):
 
     def forward(self, x):
         return self.mlp(x)
+
+class SimpleGNNLayer(nn.Module):
+    def __init__(self, node_feature_size, edge_feature_size, mlp_hidden_layer_size, mlp_n_layers, aggregation='mean'):
+        super(SimpleGNNLayer, self).__init__()
+        self.aggregation = aggregation
+
+        # MLP to update node features based on neighboring node and edge features
+        self.node_edge_mlp = MLP(node_feature_size + node_feature_size + edge_feature_size, node_feature_size, mlp_n_layers, mlp_hidden_layer_size)
+
+        # MLP to map aggregated feature to new node feature
+        self.aggregate_mlp = MLP(node_feature_size, node_feature_size, mlp_n_layers, mlp_hidden_layer_size)
+
+    def forward(self, features, adj_matrix):
+        # node_features: Tensor of shape (batch, n, n, node_pair_feature)
+        # edge_features: Tensor of shape (batch, n, n, edge_feature_size)
+        # adj_matrix: Tensor of shape (batch, n, n), binary adjacency matrix
+
+        batch_size, num_nodes, _, _= features.size()
+
+
+        mlp_input = features.flatten(0,-2)
+        node_output = self.node_edge_mlp(mlp_input)
+        node_output = node_output.view(batch_size, num_nodes, num_nodes, -1)[...,0]
+
+        # Aggregate features
+        if self.aggregation == 'mean':
+            node_output_masked = node_output * adj_matrix
+            aggregated_features = torch.sum(node_output_masked, dim=-1) / torch.sum(adj_matrix, dim=-1)
+        elif self.aggregation == 'min':
+            node_output_masked = torch.where(adj_matrix == 1, node_output, torch.ones_like(node_output) * float('inf')) 
+            aggregated_features = torch.min(node_output_masked, dim=-1)[0]
+        elif self.aggregation == 'max':
+            node_output_masked = torch.where(adj_matrix == 1, node_output, torch.ones_like(node_output) * float('-inf')) 
+            aggregated_features = torch.max(node_output_masked, dim=-1)[0]
+        else:
+            raise ValueError("Invalid aggregation method. Choose from 'mean', 'min', or 'max'.")
+        
+        # # Apply the linear layer
+        # mlp_input_2 = aggregated_features.unsqueeze(-1).flatten(0,-2)
+
+        aggregated_features_1 = aggregated_features.unsqueeze(-1).repeat(1,1,num_nodes).unsqueeze(-1)
+        updated_features = torch.cat([aggregated_features_1, aggregated_features_1.transpose(1,2), features[...,[2]]], dim=-1)
+
+        return updated_features
+
+class SimpleGNN(nn.Module):
+
+    def __init__(
+            self,
+            n_iterations,
+            node_feature_size, 
+            edge_feature_size, 
+            mlp_hidden_layer_size, 
+            mlp_n_layers, 
+            aggregation='mean'
+        ):
+        super(SimpleGNN, self).__init__()
+        self.n_iterations = n_iterations
+        self.node_feature_size = node_feature_size
+        self.edge_feature_size = edge_feature_size
+        self.mlp_hidden_layer_size = mlp_hidden_layer_size
+        self.mlp_n_layers = mlp_n_layers
+        self.aggregation = aggregation
+
+        self.gnn_layer = nn.ModuleList(
+            [SimpleGNNLayer(node_feature_size, edge_feature_size, mlp_hidden_layer_size, mlp_n_layers, aggregation) for _ in range(n_iterations)]
+        )        
+    def forward(self, features, adj_matrix):
+        # node_features: Tensor of shape (batch, n, node_feature_size)
+        # edge_features: Tensor of shape (batch, n, n, edge_feature_size)
+        # adj_matrix: Tensor of shape (batch, n, n), binary adjacency matrix
+
+        for layer in self.gnn_layer:
+            features = layer(features, adj_matrix)
+
+        return features
+
 
 
 class GNNLayer(MessagePassing):

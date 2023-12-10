@@ -5,7 +5,7 @@ from torch import nn
 import pickle
 import numpy as np
 from torch.utils.data import DataLoader
-from graph_transformers import GraphDataset, TransformerTrainer, MLPTrainer, GNNTrainer
+from graph_transformers import GraphDataset, TransformerTrainer, MLPTrainer, GNNTrainer, GNNTrainer2
 from matplotlib import pyplot as plt
 import json
 
@@ -89,57 +89,45 @@ if __name__ == "__main__":
         trans_config = all_configs["transformer"] | models_config
         trans_config["dim"] = dataset_config["n"] * dataset_config["channels"]
 
-        gnn_config = all_configs["gnn"] | models_config
-        gnn_config["num_nodes"] = dataset_config["n"]
-        gnn_config["num_iter"] = dataset_config["n"] - 1
+        # gnn_config = all_configs["gnn"] | models_config
+        # gnn_config["num_nodes"] = dataset_config["n"]
+        # gnn_config["num_iter"] = dataset_config["n"] - 1
+
+        gnn_config = all_configs["gnn2"] | models_config 
 
         mlp_config = all_configs["mlp"] | models_config
 
         if task == "min_coloring":
             trans_config["out_dim"] = 1  # Output is just chromatic number
-            gnn_config["out_dim"] = 1
+            # gnn_config["out_dim"] = 1
             mlp_config["out_dim"] = 1
 
         elif task == "shortest_path":
             trans_config["out_dim"] = dataset_config[
                 "n"
             ]  # Output is shortest path at each node from origin node
-            gnn_config["out_dim"] = dataset_config["n"]
+            # gnn_config["out_dim"] = dataset_config["n"]
             mlp_config["out_dim"] = dataset_config["n"]
 
         for size in sizes:
             
             mlp = MLPTrainer(dataset, **(mlp_config | all_configs[f"mlp_{size}"]))
             print(f"{size} MLP - Parameter count: ", sum(p.numel() for p in mlp.model.parameters() if p.requires_grad))
-            run_and_evaluate_model(mlp, plot = False, save_dir = f"results/{task}/mlp_{size}/")
-
-            # gnn = GNNTrainer(dataset, **gnn_config)
-            # run_and_evaluate_model(gnn, plot = False, save_dir = f"results/{task}/gnn_{size}/")
-
-            if size == "large":
-                mlp = MLPTrainer(dataset, **mlp_config)
-                print(
-                    f"{size} MLP - Parameter count: ",
-                    sum(p.numel() for p in mlp.model.parameters() if p.requires_grad),
-                )
-                run_and_evaluate_model(
-                    mlp, plot=False, save_dir=f"results/{task}/mlp_large/"
-                )
-
-            gnn = GNNTrainer(dataset, **gnn_config)
+            # run_and_evaluate_model(mlp, plot = False, save_dir = f"results/{task}/mlp_{size}/")
+            
+            gnn = GNNTrainer2(dataset, **(gnn_config | all_configs[f"gnn2_{size}"]))
             print(
-                f"{size} MLP - Parameter count: ",
+                f"{size} GNN - Parameter count: ",
                 sum(p.numel() for p in gnn.model.parameters() if p.requires_grad),
             )
-            run_and_evaluate_model(
-                gnn, plot=False, save_dir=f"results/{task}/gnn_{size}/"
-            )
+            # run_and_evaluate_model(gnn, plot = False, save_dir = f"results/{task}/gnn_{size}/")
 
-            # transformer = TransformerTrainer(dataset, **(trans_config | all_configs[f"transformer_{size}"]), seq_len = dataset_config["n"], attn_mask=False)
-            # print(f"{size} transformer - Parameter count: ", sum(p.numel() for p in transformer.model.parameters() if p.requires_grad))
-            # run_and_evaluate_model(transformer, plot = False, save_dir = f"results/{task}/transformer_{size}/")
 
-        selected_size = "small"
+            transformer = TransformerTrainer(dataset, **(trans_config | all_configs[f"transformer_{size}"]), seq_len = dataset_config["n"], attn_mask=False)
+            print(f"{size} transformer - Parameter count: ", sum(p.numel() for p in transformer.model.parameters() if p.requires_grad))
+            run_and_evaluate_model(transformer, plot = False, save_dir = f"results/{task}/transformer_{size}/")
+
+        selected_size = "mid"
 
         # Use adjaency matrix as attention mask
         print("Transformer with attn_mask")

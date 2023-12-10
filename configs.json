@@ -38,6 +38,29 @@
         "use_x_i": false,
         "aggr": "min"
     },
+    "gnn2":{
+        "epochs": 10,
+        "n_iterations": 5,
+        "node_feature_size":1,
+        "edge_feature_size":1,
+        "mlp_hidden_layer_size":32,
+        "mlp_n_layers":4,
+        
+        "aggregation": "max"
+    },
+    "gnn2_small":{
+        "epochs": 16,
+        "n_iterations": 2
+    },
+    "gnn2_mid":{
+        "epochs": 16,
+        "n_iterations": 5
+    },
+    "gnn2_large":{
+        "epochs": 16,
+        "n_iterations": 10
+    },
+
     "transformer": {
         "attn_dim": 128,
         "mlp_dim": 256,

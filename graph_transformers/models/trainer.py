@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 from abc import ABC
 from math import prod
 
-from graph_transformers.models.gnn import GNN, matrix_to_graph
+from graph_transformers.models.gnn import GNN, SimpleGNN,  matrix_to_graph
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -278,6 +278,58 @@ class MLPTrainer(ModelTrainer):
         # Compute prediction and loss
         pred = self.model(X)
         return pred
+
+class GNNTrainer2(ModelTrainer):
+    def __init__(
+            self,
+            dataset,
+            batch_size,
+            epochs,
+            learning_rate,
+            train_test_split,
+
+            n_iterations,
+            node_feature_size, 
+            edge_feature_size, 
+            mlp_hidden_layer_size, 
+            mlp_n_layers, 
+            
+            seed=None,
+            aggregation='mean'
+        ):
+        super().__init__(
+            dataset, batch_size, epochs, learning_rate, train_test_split, seed
+        )
+
+        self.model = SimpleGNN(
+            n_iterations,
+            node_feature_size,
+            edge_feature_size,
+            mlp_hidden_layer_size,
+            mlp_n_layers,
+            aggregation=aggregation
+        ).to(self.device)
+
+        self.model_type = "gnn2"
+
+    def pass_data(self, X, y):
+        
+        X, y = X.to(self.device), y.to(self.device)
+
+        adj_matrix = X[:,0,:,:]
+        edges = X[:,1,:,:].unsqueeze(-1)
+        node_features = torch.ones((X.shape[0], X.shape[2], 1)).to(self.device)
+        node_features[:,0,:] = 0
+
+        node_features_1 = node_features.repeat(1,1,node_features.shape[1]).unsqueeze(-1)
+
+        features = torch.cat((node_features_1, node_features_1.transpose(1,2), edges), dim=-1)
+        # Compute prediction and loss
+        out = self.model(features, adj_matrix)[...,0]
+        pred = torch.diagonal(out, dim1=1, dim2=2)
+
+        return pred
+
 
 
 class GNNTrainer(ModelTrainer):
