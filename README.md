@@ -3,67 +3,6 @@ layout: distill
 title: Graph Transformers
 description: A study of Transformers' understanding of fundamental graph problems, where we propose a new, tailored architecture highlighting the model's potential in graph-related tasks.
 
-
-date: 2023-12-09
-htmlwidgets: true
-
-# Anonymize when submitting
-authors:
-  - name: Tristan Magnin
-    affiliations:
-      name: MIT
-  - name: Gabriel Deo
-    affiliations:
-      name: MIT
-
-
-# must be the exact same name as your blogpost
-bibliography: 2023-12-09-graphs-transformers.bib  
-
-# Add a table of contents to your post.
-#   - make sure that TOC names match the actual section names
-#     for hyperlinks within the post to work correctly.
-toc:
-  - name: Motivation & Project outline
-  - name: Introduction & Literature review
-  - name: Graph Transformer Model Design
-    subsections:
-    - name: Vanilla Transformer
-    - name: Tokenization Approach and Positional Encoding
-    - name: Attention in Graph Transformers - the Necessity of a Skip-Connection
-    - name: Model Architecture Overview
-  - name: Methodology for Training and Evaluation
-    subsections:
-    - name: Constructing the Dataset
-    - name: Training Protocols
-    - name: Metrics and Evaluation Criteria
-  - name: Results and Comparative Analysis
-    subsections:
-    - name: GNN performance
-    - name: MLP Performance
-    - name: Transformer performance
-    - name: Transformer with Attention Mask, Positional Encoding & Skip Connection
-  - name: Conclusion
-
-
-# Below is an example of injecting additional post-specific styles.
-# This is used in the 'Layouts' section of this post.
-# If you use this post as a template, delete this _styles block.
-_styles: >
-  .fake-img {
-    background: #bbb;
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    box-shadow: 0 0px 4px rgba(0, 0, 0, 0.1);
-    margin-bottom: 12px;
-  }
-  .fake-img p {
-    font-family: monospace;
-    color: white;
-    text-align: left;
-    margin: 12px 0;
-    text-align: center;
-    font-size: 16px;
-  }
 ---
 
 ## Motivation & Project outline
@@ -114,6 +53,14 @@ One axe of our research is then to explore the potential benefits - or drawbacks
 
 A full Transformer will be a sequence of self-attention layers and MLPs. We now turn to the specifics of how we implement it, starting with tokenization.
 
+<div class="row justify-content-center align-items-center mt-3">
+    <div class="col-md-6 mt-3 mt-md-0">
+        {% include figure.html path="assets/img/2023-11-08-graphs-transformers/transformer_DL.jpg" class="img-fluid rounded z-depth-1" %}
+    </div>
+</div>
+<div class="caption mt-3">
+    Vanilla Transformer architecture (Source: 6.S898 Lecture)
+</div>
 
 ### Tokenization Approach and Positional Encoding
 
@@ -147,6 +94,16 @@ The Bellman-Ford update isn't a simple operation on the tokens like a sum. For i
 Overall, combining attention and skip-connection could ensure our Graph Transformer can comprehensively learn and apply the Bellman-Ford logic to solve the Shortest Path Problem. We offer a mathematical proof of this concept in Appendix A, using a slightly different tokenization method.
 
 Additionally, it's worth considering that our Graph Transformer might be learning an entirely distinct logical process for solving the Shortest Path Problem. Still, proving that such a logic is within the model's grasp underlines the model's versatility in addressing some graph-related and/or dynamic programming challenges. We'll tackle this notion in the next part about learnability and algorithmic alignment.
+
+
+<div class="row justify-content-center align-items-center mt-3">
+    <div class="col-md-6 mt-3 mt-md-0">
+        {% include figure.html path="assets/img/2023-11-08-graphs-transformers/skip_connection.jpg" class="img-fluid rounded z-depth-1" %}
+    </div>
+</div>
+<div class="caption mt-3">
+    Graph Transformer - Skip connection
+</div>
 
 ### Model Architecture Overview
 
